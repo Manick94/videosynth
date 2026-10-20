@@ -1,0 +1,10 @@
+node_modules/
+webapp/jobs/
+webapp/server.log
+output/
+*.mp4
+*.mp3
+*.wav
+.env
+__pycache__/
+*.pyc

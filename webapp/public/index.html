@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VideoSynth Studio</title>
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lottie-web@5.12.2/build/player/lottie.min.js"></script>
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand-row">
+      <div class="brand">
+        <canvas id="brandFx" width="46" height="46"></canvas>
+        <div>
+          <div class="brand-name">VideoSynth</div>
+          <div class="brand-tag">Studio</div>
+        </div>
+      </div>
+      <button id="btnOpenProjects" class="icon-btn" title="Previous projects">🗂</button>
+    </div>
+
+    <button id="btnNewProject" class="primary full new-project-btn">+ New Project</button>
+
+    <div class="panel new-project">
+      <h3>New Project</h3>
+      <label class="field">
+        <span>Project name</span>
+        <input type="text" id="projectName" placeholder="e.g. CSPL Validation Demo" />
+      </label>
+      <label class="field">
+        <span>Screenshots (.png, multiple)</span>
+        <input type="file" id="imagesInput" accept=".png" multiple />
+      </label>
+      <label class="field">
+        <span>Instructions (.md/.txt)</span>
+        <input type="file" id="instructionsFile" accept=".md,.txt" />
+      </label>
+      <details class="field">
+        <summary>or paste instructions text</summary>
+        <textarea id="instructionsText" rows="4"></textarea>
+      </details>
+      <label class="field">
+        <span>No instructions doc? Describe the workflow and the AI will write the context</span>
+        <textarea id="workflowPrompt" rows="3" placeholder="e.g. These are screens from our loan validation system — screen 1 is customer dedupe, screens 2-3 are tenure eligibility checks, screens 4-5 are parent/child loan dedupe alerts."></textarea>
+      </label>
+      <div id="contextGenProgressWrap" class="progress-wrap" style="display:none">
+        <div class="progress-bar"><div id="contextGenProgressFill" class="progress-fill"></div></div>
+        <div id="contextGenProgressLabel" class="progress-label"></div>
+      </div>
+      <label class="field">
+        <span>Prompt for the AI (optional) — tone, audience, focus</span>
+        <textarea id="customPrompt" rows="3" placeholder="e.g. Write for a compliance audience, formal tone, call out risk explicitly. Or: keep it casual, 1-line per screen, assume viewer already knows the product."></textarea>
+      </label>
+      <button id="btnUpload" class="primary full">Create &amp; Analyze</button>
+      <div id="uploadProgressWrap" class="progress-wrap" style="display:none">
+        <div class="progress-bar"><div id="uploadProgressFill" class="progress-fill"></div></div>
+        <div id="uploadProgressLabel" class="progress-label"></div>
+      </div>
+      <div id="uploadStatus" class="status"></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div id="stepper" class="stepper">
+        <div class="step-pill" data-stage="review">1. Script Review</div>
+        <div class="step-pill" data-stage="storyboard">2. Storyboard</div>
+        <div class="step-pill" data-stage="voice">3. Voice</div>
+        <div class="step-pill" data-stage="result">4. Final Video</div>
+      </div>
+      <div id="activeProjectName" class="active-project-name">No project selected</div>
+    </header>
+
+    <div class="workspace">
+      <section class="viewport">
+        <div id="viewportEmpty" class="viewport-empty">
+          <p>Upload screenshots on the left to start a new explainer video project.</p>
+        </div>
+
+        <div id="thumbArrangeView" class="thumb-arrange" style="display:none">
+          <h3>Arrange screenshot order</h3>
+          <div class="hint">Drag to reorder — this is the order they'll play in the video. Defaults to filename order.</div>
+          <div id="thumbGrid" class="thumb-grid"></div>
+        </div>
+
+        <div id="stepViewer" class="step-viewer" style="display:none">
+          <div class="stage-frame">
+            <img id="stageImage" />
+            <div id="focusMarker" class="focus-marker"></div>
+          </div>
+          <div class="stage-nav">
+            <button id="prevStep">◀</button>
+            <span id="stepIndicator">Step 1 / 1</span>
+            <button id="nextStep">▶</button>
+          </div>
+          <label class="field">
+            <span>Narration (editable — manual override before render)</span>
+            <textarea id="narrationEdit" rows="3"></textarea>
+          </label>
+          <div class="hint">Click anywhere on the screenshot to reposition the focus marker.</div>
+        </div>
+      </section>
+
+      <section class="side-panel">
+        <div id="panelReview" class="panel-stage">
+          <h3>Verify the script</h3>
+          <p class="muted">The VLM drafted narration + a focus point per step. Edit any line, reposition markers, then approve.</p>
+
+          <label class="field">
+            <span>AI prompt / guidance (tone, audience, focus)</span>
+            <textarea id="reanalyzePrompt" rows="3" placeholder="Tell the VLM how to write the narration, then regenerate."></textarea>
+          </label>
+          <button id="btnReanalyze" class="full">↻ Regenerate Narration with this Prompt</button>
+          <div id="reanalyzeProgressWrap" class="progress-wrap" style="display:none">
+            <div class="progress-bar"><div id="reanalyzeProgressFill" class="progress-fill"></div></div>
+            <div id="reanalyzeProgressLabel" class="progress-label"></div>
+          </div>
+
+          <hr class="divider" />
+          <button id="btnSaveScript" class="full">Save Edits</button>
+          <button id="btnApprove" class="primary full">Approve &amp; Continue →</button>
+          <div id="reviewStatus" class="status"></div>
+        </div>
+
+        <div id="panelStoryboard" class="panel-stage" style="display:none">
+          <h3>Pick a storyboard layout</h3>
+          <div id="layoutCards" class="layout-cards"></div>
+          <button id="btnStoryboard" class="full">Generate Storyboard PPTX</button>
+          <div id="storyboardProgressWrap" class="progress-wrap" style="display:none">
+            <div class="progress-bar"><div id="storyboardProgressFill" class="progress-fill"></div></div>
+            <div id="storyboardProgressLabel" class="progress-label"></div>
+          </div>
+          <a id="downloadPptx" class="btn-link full" style="display:none" target="_blank">⬇ Download storyboard.pptx</a>
+          <button id="toVoiceStage" class="primary full" style="display:none">Continue to Voice →</button>
+          <div id="storyboardStatus" class="status"></div>
+        </div>
+
+        <div id="panelVoice" class="panel-stage" style="display:none">
+          <h3>Choose a voice</h3>
+          <div id="voiceCards" class="voice-cards"></div>
+          <button id="btnPreviewVoice" class="full">▶ Preview Voice</button>
+          <audio id="previewAudio" controls style="display:none"></audio>
+          <button id="btnRender" class="primary full">Render Final Video</button>
+          <div id="renderProgressWrap" class="progress-wrap" style="display:none">
+            <div class="progress-bar"><div id="renderProgressFill" class="progress-fill"></div></div>
+            <div id="renderProgressLabel" class="progress-label"></div>
+          </div>
+          <div id="renderStatus" class="status"></div>
+        </div>
+
+        <div id="panelResult" class="panel-stage" style="display:none">
+          <h3>Project stats</h3>
+          <canvas id="durationChart" height="140"></canvas>
+          <video id="finalVideo" controls></video>
+          <a id="downloadVideo" class="btn-link full" target="_blank">⬇ Download final_explainer.mp4</a>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div id="projectsModal" class="modal-overlay" style="display:none">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <h3>Previous Projects</h3>
+      <button id="btnCloseProjects" class="icon-btn">✕</button>
+    </div>
+    <div id="projectsList" class="projects-list"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
